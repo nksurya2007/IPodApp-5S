@@ -1,0 +1,22 @@
+name: iPodApp
+options:
+  deploymentTarget:
+    iOS: "12.0"
+targets:
+  iPodApp:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: iPod
+        NSAppleMusicUsageDescription: Needed to play the music on your device.
+        UIRequiredDeviceCapabilities: [arm64]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIStatusBarStyle: UIStatusBarStyleDefault
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.surya.ipodapp
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
