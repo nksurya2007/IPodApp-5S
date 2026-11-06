@@ -183,7 +183,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func collectionsMenu(_ title: String, _ cols: [MPMediaItemCollection],
-                                 _ name: (MPMediaItemCollection) -> String) -> Menu {
+                                 _ name: @escaping (MPMediaItemCollection) -> String) -> Menu {
         let rows = cols.map { c in
             Row(title: name(c), arrow: true) { [weak self] in
                 guard let self = self else { return }
