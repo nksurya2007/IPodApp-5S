@@ -14,10 +14,77 @@ struct Menu {
     var sel = 0
 }
 
+struct Theme {
+    let name: String
+    let body: UIColor
+    let screen: UIColor
+    let border: UIColor
+    let bar: UIColor
+    let barText: UIColor
+    let text: UIColor
+    let subtext: UIColor
+    let selBg: UIColor
+    let selText: UIColor
+    let dark: Bool
+
+    static let all: [Theme] = [
+        Theme(name: "Classic",
+              body: UIColor(white: 0.93, alpha: 1),
+              screen: .white,
+              border: .darkGray,
+              bar: UIColor(white: 0.82, alpha: 1),
+              barText: .black,
+              text: .black,
+              subtext: .gray,
+              selBg: UIColor(red: 0.10, green: 0.45, blue: 0.82, alpha: 1),
+              selText: .white,
+              dark: false),
+        Theme(name: "Dark",
+              body: UIColor(white: 0.10, alpha: 1),
+              screen: UIColor(white: 0.07, alpha: 1),
+              border: UIColor(white: 0.35, alpha: 1),
+              bar: UIColor(white: 0.20, alpha: 1),
+              barText: .white,
+              text: .white,
+              subtext: UIColor(white: 0.60, alpha: 1),
+              selBg: UIColor(red: 0.10, green: 0.55, blue: 0.95, alpha: 1),
+              selText: .white,
+              dark: true),
+        Theme(name: "Green",
+              body: UIColor(red: 0.85, green: 0.93, blue: 0.85, alpha: 1),
+              screen: UIColor(red: 0.93, green: 0.98, blue: 0.93, alpha: 1),
+              border: UIColor(red: 0.20, green: 0.40, blue: 0.20, alpha: 1),
+              bar: UIColor(red: 0.70, green: 0.86, blue: 0.70, alpha: 1),
+              barText: UIColor(red: 0.05, green: 0.20, blue: 0.05, alpha: 1),
+              text: UIColor(red: 0.05, green: 0.20, blue: 0.05, alpha: 1),
+              subtext: UIColor(red: 0.30, green: 0.45, blue: 0.30, alpha: 1),
+              selBg: UIColor(red: 0.15, green: 0.55, blue: 0.25, alpha: 1),
+              selText: .white,
+              dark: false),
+        Theme(name: "Rose",
+              body: UIColor(red: 0.98, green: 0.90, blue: 0.92, alpha: 1),
+              screen: UIColor(red: 1.00, green: 0.97, blue: 0.98, alpha: 1),
+              border: UIColor(red: 0.60, green: 0.30, blue: 0.40, alpha: 1),
+              bar: UIColor(red: 0.95, green: 0.75, blue: 0.82, alpha: 1),
+              barText: UIColor(red: 0.25, green: 0.05, blue: 0.12, alpha: 1),
+              text: UIColor(red: 0.25, green: 0.05, blue: 0.12, alpha: 1),
+              subtext: UIColor(red: 0.55, green: 0.35, blue: 0.42, alpha: 1),
+              selBg: UIColor(red: 0.85, green: 0.25, blue: 0.45, alpha: 1),
+              selText: .white,
+              dark: false)
+    ]
+}
+
 final class iPodViewController: UIViewController, UITableViewDataSource {
     private let player = MPMusicPlayerController.systemMusicPlayer
     private var stack: [Menu] = []
     private var inNowPlaying = false
+
+    private var themeIndex: Int = min(max(UserDefaults.standard.integer(forKey: "themeIndex"), 0),
+                                      Theme.all.count - 1)
+    private var wheelIndex: Int = min(max(UserDefaults.standard.integer(forKey: "wheelIndex"), 0),
+                                      WheelStyle.all.count - 1)
+    private var theme: Theme { return Theme.all[themeIndex] }
 
     private let screen = UIView()
     private let bar = UIView()
@@ -34,11 +101,16 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private let wheel = ClickWheel()
     private var timer: Timer?
 
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return theme.dark ? .lightContent : .default
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(white: 0.93, alpha: 1)
         buildUI()
+        applyTheme()
         wireWheel()
+        wheel.style = WheelStyle.all[wheelIndex]
 
         player.beginGeneratingPlaybackNotifications()
         let nc = NotificationCenter.default
@@ -56,7 +128,13 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                     self.stack = [self.mainMenu()]
                 } else {
                     self.stack = [Menu(title: "iPod", rows: [
-                        Row(title: "Allow Music access", detail: "Settings", action: {})])]
+                        Row(title: "Allow Music access", detail: "Settings") { [weak self] in
+                            self?.openSystemSettings()
+                        },
+                        Row(title: "Settings", arrow: true) { [weak self] in
+                            guard let self = self else { return }
+                            self.push(self.settingsMenu())
+                        }])]
                 }
                 self.render()
             }
@@ -67,13 +145,10 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private func buildUI() {
         let g = view.safeAreaLayoutGuide
         [screen, wheel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
-        screen.backgroundColor = .white
-        screen.layer.borderColor = UIColor.darkGray.cgColor
         screen.layer.borderWidth = 3
         screen.layer.cornerRadius = 8
         screen.clipsToBounds = true
 
-        bar.backgroundColor = UIColor(white: 0.82, alpha: 1)
         titleLabel.font = UIFont.boldSystemFont(ofSize: 13)
         indicator.font = UIFont.boldSystemFont(ofSize: 12)
         indicator.textAlignment = .right
@@ -82,19 +157,14 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         table.isUserInteractionEnabled = false
         table.separatorStyle = .none
         table.tableFooterView = UIView()
-        npView.backgroundColor = .white
         npView.isHidden = true
 
         art.contentMode = .scaleAspectFit
-        art.backgroundColor = UIColor(white: 0.9, alpha: 1)
         npTitle.font = UIFont.boldSystemFont(ofSize: 16)
         npArtist.font = UIFont.systemFont(ofSize: 13)
-        npArtist.textColor = .darkGray
         [npTitle, npArtist].forEach { $0.textAlignment = .center }
         [t1, t2].forEach { $0.font = UIFont.systemFont(ofSize: 11) }
         t2.textAlignment = .right
-        progress.trackTintColor = UIColor(white: 0.85, alpha: 1)
-        progress.progressTintColor = UIColor(red: 0.1, green: 0.45, blue: 0.82, alpha: 1)
 
         let times = UIStackView(arrangedSubviews: [t1, t2])
         times.distribution = .fillEqually
@@ -142,6 +212,27 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         ])
     }
 
+    private func applyTheme() {
+        let t = theme
+        view.backgroundColor = t.body
+        screen.backgroundColor = t.screen
+        screen.layer.borderColor = t.border.cgColor
+        bar.backgroundColor = t.bar
+        titleLabel.textColor = t.barText
+        indicator.textColor = t.barText
+        table.backgroundColor = t.screen
+        npView.backgroundColor = t.screen
+        art.backgroundColor = t.bar
+        npTitle.textColor = t.text
+        npArtist.textColor = t.subtext
+        t1.textColor = t.subtext
+        t2.textColor = t.subtext
+        progress.trackTintColor = t.bar
+        progress.progressTintColor = t.selBg
+        setNeedsStatusBarAppearanceUpdate()
+        table.reloadData()
+    }
+
     private func wireWheel() {
         wheel.onStep = { [weak self] s in self?.step(s) }
         wheel.onCenter = { [weak self] in self?.center() }
@@ -178,7 +269,11 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 self.push(self.songsMenu("Songs", MPMediaQuery.songs().items ?? []))
             },
             Row(title: "Now Playing", arrow: true) { [weak self] in self?.showNP() },
-            Row(title: "Shuffle Songs") { [weak self] in self?.shuffleAll() }
+            Row(title: "Shuffle Songs") { [weak self] in self?.shuffleAll() },
+            Row(title: "Settings", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.settingsMenu())
+            }
         ])
     }
 
@@ -201,6 +296,85 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             })
         }
         return Menu(title: title, rows: rows.isEmpty ? [Row(title: "No songs", action: {})] : rows)
+    }
+
+    // MARK: Settings menus
+    private func settingsMenu() -> Menu {
+        return Menu(title: "Settings", rows: [
+            Row(title: "Theme", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.themeMenu())
+            },
+            Row(title: "Controller Style", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.controllerMenu())
+            },
+            Row(title: "About", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.aboutMenu())
+            }
+        ])
+    }
+
+    private func themeMenu() -> Menu {
+        let rows = Theme.all.enumerated().map { (i, t) -> Row in
+            Row(title: t.name, detail: i == themeIndex ? "\u{2713}" : nil) { [weak self] in
+                guard let self = self else { return }
+                self.themeIndex = i
+                UserDefaults.standard.set(i, forKey: "themeIndex")
+                self.applyTheme()
+                self.refreshTop(self.themeMenu())
+            }
+        }
+        return Menu(title: "Theme", rows: rows, sel: themeIndex)
+    }
+
+    private func controllerMenu() -> Menu {
+        let rows = WheelStyle.all.enumerated().map { (i, s) -> Row in
+            Row(title: s.name, detail: i == wheelIndex ? "\u{2713}" : nil) { [weak self] in
+                guard let self = self else { return }
+                self.wheelIndex = i
+                UserDefaults.standard.set(i, forKey: "wheelIndex")
+                self.wheel.style = WheelStyle.all[i]
+                self.refreshTop(self.controllerMenu())
+            }
+        }
+        return Menu(title: "Controller Style", rows: rows, sel: wheelIndex)
+    }
+
+    private func aboutMenu() -> Menu {
+        let songs = MPMediaQuery.songs().items?.count ?? 0
+        let artists = MPMediaQuery.artists().collections?.count ?? 0
+        let albums = MPMediaQuery.albums().collections?.count ?? 0
+        var version = "1.0"
+        if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, !v.isEmpty {
+            version = v
+        }
+        let info: [(String, String)] = [
+            ("Songs", "\(songs)"),
+            ("Artists", "\(artists)"),
+            ("Albums", "\(albums)"),
+            ("Version", version),
+            ("Software", "iOS " + UIDevice.current.systemVersion),
+            ("Model", UIDevice.current.model)
+        ]
+        let rows = info.map { Row(title: $0.0, detail: $0.1, action: {}) }
+        return Menu(title: "About", rows: rows)
+    }
+
+    /// Replaces the top menu (to refresh checkmarks) while keeping the highlighted row.
+    private func refreshTop(_ m: Menu) {
+        guard !stack.isEmpty else { return }
+        var n = m
+        n.sel = stack[stack.count - 1].sel
+        stack[stack.count - 1] = n
+        render()
+    }
+
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        }
     }
 
     // MARK: Playback
@@ -300,15 +474,16 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let cell = tv.dequeueReusableCell(withIdentifier: "c") ?? UITableViewCell(style: .value1, reuseIdentifier: "c")
         guard let m = stack.last else { return cell }
+        let t = theme
         let row = m.rows[ip.row]
         let sel = ip.row == m.sel
         cell.textLabel?.text = row.title
         cell.textLabel?.font = UIFont.systemFont(ofSize: 15)
         cell.detailTextLabel?.text = row.arrow ? "\u{203A}" : row.detail
         cell.detailTextLabel?.font = UIFont.systemFont(ofSize: 12)
-        cell.textLabel?.textColor = sel ? .white : .black
-        cell.detailTextLabel?.textColor = sel ? .white : .gray
-        cell.backgroundColor = sel ? UIColor(red: 0.1, green: 0.45, blue: 0.82, alpha: 1) : .white
+        cell.textLabel?.textColor = sel ? t.selText : t.text
+        cell.detailTextLabel?.textColor = sel ? t.selText : t.subtext
+        cell.backgroundColor = sel ? t.selBg : t.screen
         cell.selectionStyle = .none
         return cell
     }

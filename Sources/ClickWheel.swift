@@ -1,8 +1,43 @@
 import UIKit
 
+struct WheelStyle {
+    let name: String
+    let ring: UIColor
+    let center: UIColor
+    let label: UIColor
+    let border: UIColor
+
+    static let all: [WheelStyle] = [
+        WheelStyle(name: "White",
+                   ring: UIColor(white: 0.90, alpha: 1),
+                   center: UIColor(white: 0.98, alpha: 1),
+                   label: UIColor(white: 0.55, alpha: 1),
+                   border: UIColor(white: 0.80, alpha: 1)),
+        WheelStyle(name: "Black",
+                   ring: UIColor(white: 0.12, alpha: 1),
+                   center: UIColor(white: 0.20, alpha: 1),
+                   label: UIColor(white: 0.85, alpha: 1),
+                   border: UIColor(white: 0.32, alpha: 1)),
+        WheelStyle(name: "Silver",
+                   ring: UIColor(red: 0.74, green: 0.76, blue: 0.79, alpha: 1),
+                   center: UIColor(red: 0.84, green: 0.86, blue: 0.89, alpha: 1),
+                   label: UIColor(white: 0.30, alpha: 1),
+                   border: UIColor(red: 0.60, green: 0.62, blue: 0.66, alpha: 1)),
+        WheelStyle(name: "Red",
+                   ring: UIColor(red: 0.80, green: 0.12, blue: 0.16, alpha: 1),
+                   center: UIColor(red: 0.90, green: 0.25, blue: 0.28, alpha: 1),
+                   label: UIColor(white: 1.0, alpha: 0.9),
+                   border: UIColor(red: 0.62, green: 0.08, blue: 0.12, alpha: 1))
+    ]
+}
+
 final class ClickWheel: UIView {
     var onStep: ((Int) -> Void)?
     var onCenter, onMenu, onPlay, onNext, onPrev: (() -> Void)?
+
+    var style: WheelStyle = WheelStyle.all[0] {
+        didSet { applyStyle() }
+    }
 
     private var lastAngle: CGFloat = 0
     private var acc: CGFloat = 0
@@ -13,22 +48,27 @@ final class ClickWheel: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor(white: 0.90, alpha: 1)
-        centerBtn.backgroundColor = UIColor(white: 0.98, alpha: 1)
         centerBtn.isUserInteractionEnabled = false
         addSubview(centerBtn)
         for t in ["MENU", "\u{25B6}\u{FE0E}\u{2758}\u{2758}", "\u{25C0}\u{25C0}", "\u{25B6}\u{25B6}"] {
             let l = UILabel()
             l.text = t
             l.font = UIFont.boldSystemFont(ofSize: 13)
-            l.textColor = UIColor(white: 0.55, alpha: 1)
             l.sizeToFit()
             l.isUserInteractionEnabled = false
             addSubview(l)
             labels.append(l)
         }
+        applyStyle()
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    private func applyStyle() {
+        backgroundColor = style.ring
+        centerBtn.backgroundColor = style.center
+        centerBtn.layer.borderColor = style.border.cgColor
+        labels.forEach { $0.textColor = style.label }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -42,7 +82,6 @@ final class ClickWheel: UIView {
         centerBtn.frame = CGRect(x: (w - c) / 2, y: (w - c) / 2, width: c, height: c)
         centerBtn.layer.cornerRadius = c / 2
         centerBtn.layer.borderWidth = 1
-        centerBtn.layer.borderColor = UIColor(white: 0.8, alpha: 1).cgColor
         labels[0].center = CGPoint(x: w / 2, y: w * 0.12)
         labels[1].center = CGPoint(x: w / 2, y: w * 0.88)
         labels[2].center = CGPoint(x: w * 0.12 + labels[2].bounds.width / 2, y: w / 2)
