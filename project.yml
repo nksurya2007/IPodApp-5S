@@ -15,8 +15,9 @@ targets:
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIStatusBarStyle: UIStatusBarStyleDefault
-    settings:
+        settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.surya.ipodapp
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
