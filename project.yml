@@ -14,8 +14,10 @@ targets:
         NSAppleMusicUsageDescription: Needed to play the music on your device.
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIStatusBarStyle: UIStatusBarStyleDefault
-        settings:
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UILaunchStoryboardName: LaunchScreen
+    settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.surya.ipodapp
         SWIFT_VERSION: "5.0"

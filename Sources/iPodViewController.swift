@@ -1,5 +1,6 @@
 import UIKit
 import MediaPlayer
+import AVFoundation
 
 struct Row {
     let title: String
@@ -76,7 +77,7 @@ struct Theme {
 }
 
 final class iPodViewController: UIViewController, UITableViewDataSource {
-    private let player = MPMusicPlayerController.systemMusicPlayer
+    private let player = MPMusicPlayerController.applicationMusicPlayer
     private var stack: [Menu] = []
     private var inNowPlaying = false
 
@@ -100,6 +101,17 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private let t2 = UILabel()
     private let wheel = ClickWheel()
     private var timer: Timer?
+
+    // Volume
+    private let volumeView = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 10, height: 10))
+    private let volBar = UIProgressView(progressViewStyle: .default)
+    private let volLabel = UILabel()
+    private let modeLabel = UILabel()
+    private var scrubMode = false
+    private var volume: Float = AVAudioSession.sharedInstance().outputVolume
+    private var lastVolChange = Date.distantPast
+
+    override var prefersStatusBarHidden: Bool { return true }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return theme.dark ? .lightContent : .default
@@ -144,7 +156,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     // MARK: UI
     private func buildUI() {
         let g = view.safeAreaLayoutGuide
-        [screen, wheel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
+        [screen, wheel, volumeView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
         screen.layer.borderWidth = 3
         screen.layer.cornerRadius = 8
         screen.clipsToBounds = true
@@ -153,7 +165,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         indicator.font = UIFont.boldSystemFont(ofSize: 12)
         indicator.textAlignment = .right
         table.dataSource = self
-        table.rowHeight = 26
+        table.rowHeight = 30
         table.isUserInteractionEnabled = false
         table.separatorStyle = .none
         table.tableFooterView = UIView()
@@ -168,7 +180,13 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
 
         let times = UIStackView(arrangedSubviews: [t1, t2])
         times.distribution = .fillEqually
-        let col = UIStackView(arrangedSubviews: [art, npTitle, npArtist, progress, times])
+        volLabel.text = "Volume"
+        volLabel.font = UIFont.systemFont(ofSize: 10)
+        modeLabel.font = UIFont.boldSystemFont(ofSize: 10)
+        modeLabel.textAlignment = .right
+        let volRow = UIStackView(arrangedSubviews: [volLabel, modeLabel])
+        volRow.distribution = .fillEqually
+        let col = UIStackView(arrangedSubviews: [art, npTitle, npArtist, progress, times, volRow, volBar])
         col.axis = .vertical
         col.spacing = 5
         col.translatesAutoresizingMaskIntoConstraints = false
@@ -181,7 +199,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             screen.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
             screen.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
             screen.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
-            screen.heightAnchor.constraint(equalToConstant: 232),
+            screen.bottomAnchor.constraint(equalTo: wheel.topAnchor, constant: -16),
 
             bar.topAnchor.constraint(equalTo: screen.topAnchor),
             bar.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
@@ -203,12 +221,12 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             col.topAnchor.constraint(equalTo: npView.topAnchor, constant: 6),
             col.leadingAnchor.constraint(equalTo: npView.leadingAnchor, constant: 10),
             col.trailingAnchor.constraint(equalTo: npView.trailingAnchor, constant: -10),
-            art.heightAnchor.constraint(equalToConstant: 100),
+            art.heightAnchor.constraint(equalToConstant: 90),
 
-            wheel.widthAnchor.constraint(equalToConstant: 250),
-            wheel.heightAnchor.constraint(equalToConstant: 250),
+            wheel.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.76),
+            wheel.heightAnchor.constraint(equalTo: wheel.widthAnchor),
             wheel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            wheel.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -20)
+            wheel.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -16)
         ])
     }
 
@@ -227,6 +245,10 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         npArtist.textColor = t.subtext
         t1.textColor = t.subtext
         t2.textColor = t.subtext
+        volLabel.textColor = t.subtext
+        modeLabel.textColor = t.selBg
+        volBar.trackTintColor = t.bar
+        volBar.progressTintColor = t.selBg
         progress.trackTintColor = t.bar
         progress.progressTintColor = t.selBg
         setNeedsStatusBarAppearanceUpdate()
@@ -256,17 +278,19 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             },
             Row(title: "Artists", arrow: true) { [weak self] in
                 guard let self = self else { return }
-                let cols = MPMediaQuery.artists().collections ?? []
-                self.push(self.collectionsMenu("Artists", cols) { $0.representativeItem?.artist ?? "Unknown" })
+                let cols = self.grouped { $0.albumArtist ?? $0.artist ?? "Unknown Artist" }
+                self.push(self.collectionsMenu("Artists", cols) {
+                    $0.representativeItem?.albumArtist ?? $0.representativeItem?.artist ?? "Unknown Artist"
+                })
             },
             Row(title: "Albums", arrow: true) { [weak self] in
                 guard let self = self else { return }
-                let cols = MPMediaQuery.albums().collections ?? []
-                self.push(self.collectionsMenu("Albums", cols) { $0.representativeItem?.albumTitle ?? "Unknown" })
+                let cols = self.grouped { $0.albumTitle ?? "Unknown Album" }
+                self.push(self.collectionsMenu("Albums", cols) { $0.representativeItem?.albumTitle ?? "Unknown Album" })
             },
             Row(title: "Songs", arrow: true) { [weak self] in
                 guard let self = self else { return }
-                self.push(self.songsMenu("Songs", MPMediaQuery.songs().items ?? []))
+                self.push(self.songsMenu("Songs", self.allSongs()))
             },
             Row(title: "Now Playing", arrow: true) { [weak self] in self?.showNP() },
             Row(title: "Shuffle Songs") { [weak self] in self?.shuffleAll() },
@@ -275,6 +299,31 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 self.push(self.settingsMenu())
             }
         ])
+    }
+
+    /// Every audio item in the library (music, podcasts, audiobooks, imported audio, iCloud items),
+    /// not just the "music" type that MPMediaQuery.songs() returns.
+    private func allSongs() -> [MPMediaItem] {
+        let items = MPMediaQuery().items ?? []
+        return items
+            .filter { $0.mediaType.rawValue & MPMediaType.anyAudio.rawValue != 0 }
+            .sorted { ($0.title ?? "").localizedCaseInsensitiveCompare($1.title ?? "") == .orderedAscending }
+    }
+
+    private func grouped(_ key: (MPMediaItem) -> String) -> [MPMediaItemCollection] {
+        let dict = Dictionary(grouping: allSongs(), by: key)
+        return dict.keys
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            .map { k in
+                let sorted = (dict[k] ?? []).sorted {
+                    if $0.albumTitle != $1.albumTitle {
+                        return ($0.albumTitle ?? "").localizedCaseInsensitiveCompare($1.albumTitle ?? "") == .orderedAscending
+                    }
+                    if $0.discNumber != $1.discNumber { return $0.discNumber < $1.discNumber }
+                    return $0.albumTrackNumber < $1.albumTrackNumber
+                }
+                return MPMediaItemCollection(items: sorted)
+            }
     }
 
     private func collectionsMenu(_ title: String, _ cols: [MPMediaItemCollection],
@@ -343,7 +392,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func aboutMenu() -> Menu {
-        let songs = MPMediaQuery.songs().items?.count ?? 0
+        let songs = allSongs().count
         let artists = MPMediaQuery.artists().collections?.count ?? 0
         let albums = MPMediaQuery.albums().collections?.count ?? 0
         var version = "1.0"
@@ -377,6 +426,25 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         }
     }
 
+    // MARK: Volume
+    private var volumeSlider: UISlider? {
+        return volumeView.subviews.compactMap { $0 as? UISlider }.first
+    }
+
+    private func setVolume(_ v: Float) {
+        volume = max(0, min(1, v))
+        lastVolChange = Date()
+        volumeSlider?.value = volume
+    }
+
+    /// Stops playback and tears everything down (called when the app is closed).
+    func shutdown() {
+        timer?.invalidate()
+        timer = nil
+        player.stop()
+        player.endGeneratingPlaybackNotifications()
+    }
+
     // MARK: Playback
     private func play(_ items: [MPMediaItem], at i: Int) {
         guard i < items.count else { return }
@@ -388,7 +456,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func shuffleAll() {
-        let items = MPMediaQuery.songs().items ?? []
+        let items = allSongs()
         guard !items.isEmpty else { return }
         player.setQueue(with: MPMediaItemCollection(items: items))
         player.shuffleMode = .songs
@@ -415,8 +483,12 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
 
     private func step(_ s: Int) {
         if inNowPlaying {
-            let d = player.nowPlayingItem?.playbackDuration ?? 0
-            player.currentPlaybackTime = max(0, min(d, player.currentPlaybackTime + Double(s) * 5))
+            if scrubMode {
+                let d = player.nowPlayingItem?.playbackDuration ?? 0
+                player.currentPlaybackTime = max(0, min(d, player.currentPlaybackTime + Double(s) * 5))
+            } else {
+                setVolume(volume + Float(s) / 16)
+            }
             updateNP()
         } else if !stack.isEmpty {
             let i = stack.count - 1
@@ -426,7 +498,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func center() {
-        if inNowPlaying { toggle(); return }
+        if inNowPlaying { scrubMode.toggle(); updateNP(); return }
         guard let m = stack.last, m.sel < m.rows.count else { return }
         m.rows[m.sel].action()
     }
@@ -448,6 +520,11 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     @objc private func updateNP() {
         indicator.text = player.playbackState == .playing ? "\u{25B6}\u{FE0E}" : "\u{2758}\u{2758}"
         guard inNowPlaying else { return }
+        if Date().timeIntervalSince(lastVolChange) > 0.8 {   // pick up hardware volume button changes
+            volume = AVAudioSession.sharedInstance().outputVolume
+        }
+        volBar.progress = volume
+        modeLabel.text = scrubMode ? "Wheel: Seek (press center)" : "Wheel: Volume (press center)"
         let item = player.nowPlayingItem
         npTitle.text = item?.title ?? "Nothing Playing"
         npArtist.text = [item?.artist, item?.albumTitle].compactMap { $0 }.joined(separator: " - ")
