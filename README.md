@@ -10,7 +10,7 @@ Made by **SN STUDIO** 💙
 
 | Main menu | Cover Flow | Settings | Brick Game | About |
 | :---: | :---: | :---: | :---: | :---: |
-| <img src="screenshots/menu.png" width="160"> | <img src="screenshots/coverflow.png" width="160"> | <img src="screenshots/settings.png" width="160"> | <img src="screenshots/brick-game.png" width="160"> | <img src="screenshots/about.png" width="160"> |
+| <img src="screenshots/Main%20menu.PNG" width="160"> | <img src="screenshots/Cover%20flow.PNG" width="160"> | <img src="screenshots/Settings.PNG" width="160"> | <img src="screenshots/Brick%20Game.PNG" width="160"> | <img src="screenshots/About.PNG" width="160"> |
 
 ## Features
 
