@@ -11,7 +11,9 @@ final class CoverFlowView: UIView {
     private let titleLabel = UILabel()
     private let subLabel = UILabel()
     private var coverSize: CGFloat = 0
-    private(set) var songMode = false   // true: each cover is one song
+    enum Kind { case album, song, artist, playlist }
+    private(set) var kind: Kind = .album
+    var songMode: Bool { return kind == .song }
 
     var current: MPMediaItemCollection? {
         return albums.indices.contains(index) ? albums[index] : nil
@@ -36,20 +38,21 @@ final class CoverFlowView: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    func setAlbums(_ a: [MPMediaItemCollection]) {
-        songMode = false
+    func setAlbums(_ a: [MPMediaItemCollection]) { setCollections(a, kind: .album) }
+
+    func setCollections(_ a: [MPMediaItemCollection], kind k: Kind) {
+        kind = k
         load(a)
     }
 
     func setSongs(_ items: [MPMediaItem]) {
-        songMode = true
-        index = 0
+        kind = .song
         load(items.map { MPMediaItemCollection(items: [$0]) })
     }
 
     private func load(_ a: [MPMediaItemCollection]) {
         albums = a
-        index = min(index, max(0, a.count - 1))
+        index = 0
         covers.values.forEach { $0.removeFromSuperview() }
         covers.removeAll()
         images.removeAll()
@@ -169,17 +172,29 @@ final class CoverFlowView: UIView {
 
     private func updateLabels() {
         guard let c = current else {
-            titleLabel.text = songMode ? "No songs" : "No albums"
+            switch kind {
+            case .song: titleLabel.text = "No songs"
+            case .artist: titleLabel.text = "No artists"
+            case .playlist: titleLabel.text = "No playlists"
+            case .album: titleLabel.text = "No albums"
+            }
             subLabel.text = nil
             return
         }
         let it = c.representativeItem
-        if songMode {
+        switch kind {
+        case .song:
             titleLabel.text = it?.title ?? "Unknown"
             subLabel.text = it?.artist ?? ""
-            return
+        case .artist:
+            titleLabel.text = it?.albumArtist ?? it?.artist ?? "Unknown Artist"
+            subLabel.text = "\(c.count) songs"
+        case .playlist:
+            titleLabel.text = (c as? MPMediaPlaylist)?.name ?? "Playlist"
+            subLabel.text = "\(c.count) songs"
+        case .album:
+            titleLabel.text = it?.albumTitle ?? "Unknown Album"
+            subLabel.text = it?.albumArtist ?? it?.artist ?? ""
         }
-        titleLabel.text = it?.albumTitle ?? "Unknown Album"
-        subLabel.text = it?.albumArtist ?? it?.artist ?? ""
     }
 }

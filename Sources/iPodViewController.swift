@@ -162,11 +162,18 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private var clickSoundOn: Bool {
         return UserDefaults.standard.object(forKey: "clickSound") as? Bool ?? true
     }
-    // Songs: view (0 = In Line, 1 = Cover Flow) and sort (0 = A-Z, 1 = Z-A, 2 = Recently Added)
-    private var songViewMode: Int { return UserDefaults.standard.integer(forKey: "songView") }
+    // Per-list view (0 = In Line, 1 = Cover Flow) and one sort for all lists
+    // (0 = A-Z, 1 = Z-A, 2 = Recently Added)
+    private enum ListKind: String {
+        case songs, artists, albums, playlists
+        var title: String { return rawValue.capitalized }
+    }
+    private func viewMode(_ k: ListKind) -> Int {
+        return UserDefaults.standard.integer(forKey: "view_" + k.rawValue)
+    }
     private var songSort: Int { return UserDefaults.standard.integer(forKey: "songSort") }
-    private let songViewNames = ["In Line", "Cover Flow"]
     private let songSortNames = ["A-Z", "Z-A", "Recently Added"]
+    private var coverTitle = "Cover Flow"
 
     override var prefersStatusBarHidden: Bool { return true }
 
@@ -343,33 +350,10 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     // MARK: Menus
     private func mainMenu() -> Menu {
         return Menu(title: "iPod", rows: [
-            Row(title: "Playlists", arrow: true) { [weak self] in
-                guard let self = self else { return }
-                let cols = MPMediaQuery.playlists().collections ?? []
-                self.push(self.collectionsMenu("Playlists", cols) { ($0 as? MPMediaPlaylist)?.name ?? "Playlist" })
-            },
-            Row(title: "Artists", arrow: true) { [weak self] in
-                guard let self = self else { return }
-                let cols = self.grouped { $0.albumArtist ?? $0.artist ?? "Unknown Artist" }
-                self.push(self.collectionsMenu("Artists", cols) {
-                    $0.representativeItem?.albumArtist ?? $0.representativeItem?.artist ?? "Unknown Artist"
-                })
-            },
-            Row(title: "Albums", arrow: true) { [weak self] in
-                guard let self = self else { return }
-                let cols = self.grouped { $0.albumTitle ?? "Unknown Album" }
-                self.push(self.collectionsMenu("Albums", cols) { $0.representativeItem?.albumTitle ?? "Unknown Album" })
-            },
-            Row(title: "Cover Flow", arrow: true) { [weak self] in
-                guard let self = self else { return }
-                self.coverFlow.setAlbums(self.grouped { $0.albumTitle ?? "Unknown Album" })
-                self.inCoverFlow = true
-                self.render()
-            },
-            Row(title: "Songs", arrow: true) { [weak self] in
-                guard let self = self else { return }
-                self.openSongs()
-            },
+            Row(title: "Playlists", arrow: true) { [weak self] in self?.openList(.playlists) },
+            Row(title: "Artists", arrow: true) { [weak self] in self?.openList(.artists) },
+            Row(title: "Albums", arrow: true) { [weak self] in self?.openList(.albums) },
+            Row(title: "Songs", arrow: true) { [weak self] in self?.openList(.songs) },
             Row(title: "Now Playing", arrow: true) { [weak self] in self?.showNP() },
             Row(title: "Shuffle Songs") { [weak self] in self?.shuffleAll() },
             Row(title: "Extras", arrow: true) { [weak self] in
@@ -402,15 +386,60 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         }
     }
 
-    private func openSongs() {
-        let items = sortedSongs()
-        if songViewMode == 1 {
-            coverSongs = items
-            coverFlow.setSongs(items)
+    private func collName(_ k: ListKind, _ c: MPMediaItemCollection) -> String {
+        switch k {
+        case .playlists: return (c as? MPMediaPlaylist)?.name ?? "Playlist"
+        case .artists:   return c.representativeItem?.albumArtist ?? c.representativeItem?.artist ?? "Unknown Artist"
+        default:         return c.representativeItem?.albumTitle ?? "Unknown Album"
+        }
+    }
+
+    private func sortedCollections(_ k: ListKind) -> [MPMediaItemCollection] {
+        var cols: [MPMediaItemCollection]
+        switch k {
+        case .playlists: cols = MPMediaQuery.playlists().collections ?? []
+        case .artists:   cols = grouped { $0.albumArtist ?? $0.artist ?? "Unknown Artist" }
+        default:         cols = grouped { $0.albumTitle ?? "Unknown Album" }
+        }
+        func az(_ a: MPMediaItemCollection, _ b: MPMediaItemCollection) -> Bool {
+            return collName(k, a).localizedCaseInsensitiveCompare(collName(k, b)) == .orderedAscending
+        }
+        func newest(_ c: MPMediaItemCollection) -> Date {
+            return c.items.map { $0.dateAdded }.max() ?? Date.distantPast
+        }
+        switch songSort {
+        case 1:  cols.sort { az($1, $0) }
+        case 2:  cols.sort { newest($0) > newest($1) }
+        default: cols.sort(by: az)
+        }
+        return cols
+    }
+
+    /// Opens Songs / Artists / Albums / Playlists as a line list or Cover Flow, per Settings.
+    private func openList(_ k: ListKind) {
+        let coverFlowOn = viewMode(k) == 1
+        if k == .songs {
+            let items = sortedSongs()
+            if coverFlowOn {
+                coverSongs = items
+                coverFlow.setSongs(items)
+                coverTitle = k.title
+                inCoverFlow = true
+                render()
+            } else {
+                push(songsMenu(k.title, items))
+            }
+            return
+        }
+        let cols = sortedCollections(k)
+        if coverFlowOn {
+            let ck: CoverFlowView.Kind = (k == .artists) ? .artist : (k == .playlists ? .playlist : .album)
+            coverFlow.setCollections(cols, kind: ck)
+            coverTitle = k.title
             inCoverFlow = true
             render()
         } else {
-            push(songsMenu("Songs", items))
+            push(collectionsMenu(k.title, cols) { [weak self] c in self?.collName(k, c) ?? "" })
         }
     }
 
@@ -462,9 +491,13 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 guard let self = self else { return }
                 self.push(self.controllerMenu())
             },
-            Row(title: "Songs", arrow: true) { [weak self] in
+            Row(title: "Cover Flow", arrow: true) { [weak self] in
                 guard let self = self else { return }
-                self.push(self.songsSettingsMenu())
+                self.push(self.coverFlowSettingsMenu())
+            },
+            Row(title: "Sort", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.sortMenu())
             },
             Row(title: "Click Sound", detail: clickSoundOn ? "On" : "Off") { [weak self] in
                 guard let self = self else { return }
@@ -493,23 +526,28 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         return Menu(title: "Theme", rows: rows, sel: themeIndex)
     }
 
-    private func songsSettingsMenu() -> Menu {
-        var rows: [Row] = []
-        for (i, n) in songViewNames.enumerated() {
-            rows.append(Row(title: "View: " + n, detail: i == songViewMode ? "\u{2713}" : nil) { [weak self] in
+    /// Press center on a row to switch it between In Line and Cover Flow.
+    private func coverFlowSettingsMenu() -> Menu {
+        let kinds: [ListKind] = [.songs, .artists, .albums, .playlists]
+        let rows = kinds.map { k -> Row in
+            Row(title: k.title, detail: viewMode(k) == 1 ? "Cover Flow" : "In Line") { [weak self] in
                 guard let self = self else { return }
-                UserDefaults.standard.set(i, forKey: "songView")
-                self.refreshTop(self.songsSettingsMenu())
-            })
+                UserDefaults.standard.set(self.viewMode(k) == 1 ? 0 : 1, forKey: "view_" + k.rawValue)
+                self.refreshTop(self.coverFlowSettingsMenu())
+            }
         }
-        for (i, n) in songSortNames.enumerated() {
-            rows.append(Row(title: "Sort: " + n, detail: i == songSort ? "\u{2713}" : nil) { [weak self] in
+        return Menu(title: "Cover Flow", rows: rows)
+    }
+
+    private func sortMenu() -> Menu {
+        let rows = songSortNames.enumerated().map { (i, n) -> Row in
+            Row(title: n, detail: i == songSort ? "\u{2713}" : nil) { [weak self] in
                 guard let self = self else { return }
                 UserDefaults.standard.set(i, forKey: "songSort")
-                self.refreshTop(self.songsSettingsMenu())
-            })
+                self.refreshTop(self.sortMenu())
+            }
         }
-        return Menu(title: "Songs", rows: rows)
+        return Menu(title: "Sort", rows: rows, sel: songSort)
     }
 
     private func controllerMenu() -> Menu {
@@ -681,7 +719,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         if inGame { game.start() } else { game.stop() }
         if inNowPlaying { titleLabel.text = "Now Playing" }
         else if inGame { titleLabel.text = "Brick Game" }
-        else if inCoverFlow { titleLabel.text = coverFlow.songMode ? "Songs" : "Cover Flow" }
+        else if inCoverFlow { titleLabel.text = coverTitle }
         else { titleLabel.text = stack.last?.title ?? "iPod" }
         if inNowPlaying { updateNP() }
         else if showTable {
