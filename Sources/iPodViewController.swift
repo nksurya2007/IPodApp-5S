@@ -77,7 +77,7 @@ struct Theme {
 }
 
 final class iPodViewController: UIViewController, UITableViewDataSource {
-    private let player = MPMusicPlayerController.systemMusicPlayer
+    private let player = MPMusicPlayerController.applicationMusicPlayer
     private var stack: [Menu] = []
     private var inNowPlaying = false
 
