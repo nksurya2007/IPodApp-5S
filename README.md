@@ -1,16 +1,16 @@
-# iPodApp
+﻿# iPodApp
 
 A classic iPod-style music player for iPhone, written in Swift with UIKit. It has a menu screen, a touch **click wheel**, **Cover Flow**, a built-in **Brick Game**, and plays the music already stored on your device through Apple's `MediaPlayer` framework.
 
 Built to run on older devices (works on iPhone 5s / iOS 12) and fill the whole screen.
 
-Made by **SN STUDIO** 💙
+Made by **SN STUDIO** ðŸ’™
 
 ## Screenshots
 
 | Main menu | Cover Flow | Settings | Brick Game | About |
 | :---: | :---: | :---: | :---: | :---: |
-| <img src="screenshots/menu.png" width="160"> | <img src="screenshots/coverflow.png" width="160"> | <img src="screenshots/settings.png" width="160"> | <img src="screenshots/brick-game.png" width="160"> | <img src="screenshots/about.png" width="160"> |
+| <img src="Screenshots/menu.png" width="160"> | <img src="Screenshots/coverflow.png" width="160"> | <img src="Screenshots/settings.png" width="160"> | <img src="Screenshots/brick-game.png" width="160"> | <img src="Screenshots/about.png" width="160"> |
 
 ## Features
 
@@ -21,7 +21,7 @@ Made by **SN STUDIO** 💙
 - **Shuffle Songs** and a **Now Playing** screen with artwork, title, artist, album, progress bar and time remaining
 - **Volume control**: turn the wheel on the Now Playing screen to change the volume (follows the hardware volume buttons too)
 - **Seek**: press the center on the Now Playing screen to switch the wheel between Volume and Seek
-- **Brick Game**: a Breakout game played with the wheel (Extras → Brick Game)
+- **Brick Game**: a Breakout game played with the wheel (Extras â†’ Brick Game)
 - **10 screen themes**: Classic, Dark, Green, Rose, Ocean, Sunset, Purple, Gold, U2 Red, Matrix
 - **8 wheel styles**: White, Black, Silver, Red, Gold, Blue, Pink, Green
 - **Click sound** on/off
@@ -43,24 +43,24 @@ Made by **SN STUDIO** 💙
 
 ```
 iPod
-├── Playlists
-├── Artists
-├── Albums
-├── Songs
-├── Now Playing
-├── Shuffle Songs
-├── Extras
-│   └── Brick Game
-└── Settings
-    ├── Theme
-    ├── Controller Style
-    ├── Cover Flow   (Songs / Artists / Albums / Playlists: In Line or Cover Flow)
-    ├── Sort         (A-Z / Z-A / Recently Added)
-    ├── Click Sound
-    └── About (song / artist / album counts, version, iOS version, model, SN STUDIO)
+â”œâ”€â”€ Playlists
+â”œâ”€â”€ Artists
+â”œâ”€â”€ Albums
+â”œâ”€â”€ Songs
+â”œâ”€â”€ Now Playing
+â”œâ”€â”€ Shuffle Songs
+â”œâ”€â”€ Extras
+â”‚   â””â”€â”€ Brick Game
+â””â”€â”€ Settings
+    â”œâ”€â”€ Theme
+    â”œâ”€â”€ Controller Style
+    â”œâ”€â”€ Cover Flow   (Songs / Artists / Albums / Playlists: In Line or Cover Flow)
+    â”œâ”€â”€ Sort         (A-Z / Z-A / Recently Added)
+    â”œâ”€â”€ Click Sound
+    â””â”€â”€ About (song / artist / album counts, version, iOS version, model, SN STUDIO)
 ```
 
-In **Settings → Cover Flow**, press the center on a row to switch it between *In Line* and *Cover Flow*.
+In **Settings â†’ Cover Flow**, press the center on a row to switch it between *In Line* and *Cover Flow*.
 
 ## Requirements
 
@@ -72,16 +72,16 @@ In **Settings → Cover Flow**, press the center on a row to switch it between *
 
 ```
 .
-├── project.yml                  # XcodeGen project definition
-├── screenshots/                 # README images
-├── .github/workflows/build.yml  # GitHub Actions: builds an unsigned IPA
-└── Sources/
-    ├── AppDelegate.swift        # App entry point, audio session
-    ├── iPodViewController.swift # Menus, Now Playing, themes, volume, playback, settings
-    ├── ClickWheel.swift         # Touch click wheel and wheel styles
-    ├── CoverFlowView.swift      # 3D Cover Flow for songs, artists, albums, playlists
-    ├── BrickGameView.swift      # Breakout game
-    └── LaunchScreen.storyboard  # Launch screen (enables fullscreen on all iPhones)
+â”œâ”€â”€ project.yml                  # XcodeGen project definition
+â”œâ”€â”€ Screenshots/                 # README images
+â”œâ”€â”€ .github/workflows/build.yml  # GitHub Actions: builds an unsigned IPA
+â””â”€â”€ Sources/
+    â”œâ”€â”€ AppDelegate.swift        # App entry point, audio session
+    â”œâ”€â”€ iPodViewController.swift # Menus, Now Playing, themes, volume, playback, settings
+    â”œâ”€â”€ ClickWheel.swift         # Touch click wheel and wheel styles
+    â”œâ”€â”€ CoverFlowView.swift      # 3D Cover Flow for songs, artists, albums, playlists
+    â”œâ”€â”€ BrickGameView.swift      # Breakout game
+    â””â”€â”€ LaunchScreen.storyboard  # Launch screen (enables fullscreen on all iPhones)
 ```
 
 The Xcode project is generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen), so there is no `.xcodeproj` checked in.
