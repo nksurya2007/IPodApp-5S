@@ -117,6 +117,55 @@ struct Theme {
     ]
 }
 
+/// Small battery icon (outline + fill level + charging bolt).
+final class BatteryView: UIView {
+    var level: CGFloat = 1 { didSet { setNeedsDisplay() } }
+    var charging = false { didSet { setNeedsDisplay() } }
+    var color: UIColor = .black { didSet { setNeedsDisplay() } }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: CGSize { return CGSize(width: 26, height: 12) }
+
+    override func draw(_ rect: CGRect) {
+        let body = CGRect(x: 0.5, y: 0.5, width: bounds.width - 4, height: bounds.height - 1)
+        color.setStroke()
+        let outline = UIBezierPath(roundedRect: body, cornerRadius: 2.5)
+        outline.lineWidth = 1
+        outline.stroke()
+        color.setFill()
+        UIBezierPath(roundedRect: CGRect(x: body.maxX + 1, y: bounds.height / 2 - 2.5, width: 2, height: 5),
+                     cornerRadius: 1).fill()
+
+        let inner = body.insetBy(dx: 2, dy: 2)
+        var f = inner
+        f.size.width = max(0, inner.width * max(0, min(1, level)))
+        if charging { UIColor(red: 0.20, green: 0.75, blue: 0.30, alpha: 1).setFill() }
+        else if level <= 0.2 { UIColor(red: 0.90, green: 0.20, blue: 0.20, alpha: 1).setFill() }
+        else { color.setFill() }
+        UIBezierPath(roundedRect: f, cornerRadius: 1).fill()
+
+        if charging {
+            let cx = body.midX, cy = body.midY
+            let bolt = UIBezierPath()
+            bolt.move(to: CGPoint(x: cx + 1.5, y: cy - 4))
+            bolt.addLine(to: CGPoint(x: cx - 2.5, y: cy + 0.5))
+            bolt.addLine(to: CGPoint(x: cx - 0.2, y: cy + 0.5))
+            bolt.addLine(to: CGPoint(x: cx - 1.5, y: cy + 4))
+            bolt.addLine(to: CGPoint(x: cx + 2.5, y: cy - 0.5))
+            bolt.addLine(to: CGPoint(x: cx + 0.2, y: cy - 0.5))
+            bolt.close()
+            UIColor(white: 0.1, alpha: 1).setFill()
+            bolt.fill()
+        }
+    }
+}
+
 final class iPodViewController: UIViewController, UITableViewDataSource {
     private let player = MPMusicPlayerController.applicationMusicPlayer
     private var stack: [Menu] = []
@@ -132,7 +181,8 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private let bar = UIView()
     private let titleLabel = UILabel()
     private let indicator = UILabel()
-    private let statusLabel = UILabel()   // clock + battery %
+    private let clockLabel = UILabel()      // time, centered in the title bar
+    private let battery = BatteryView()
     private let clockFormat: DateFormatter = {
         let f = DateFormatter()
         f.timeStyle = .short
@@ -236,9 +286,9 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         titleLabel.font = UIFont.boldSystemFont(ofSize: 13)
         indicator.font = UIFont.boldSystemFont(ofSize: 12)
         indicator.textAlignment = .right
-        statusLabel.font = UIFont.boldSystemFont(ofSize: 11)
-        statusLabel.textAlignment = .right
-        statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        clockLabel.font = UIFont.boldSystemFont(ofSize: 12)
+        clockLabel.textAlignment = .center
+        clockLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         table.dataSource = self
         table.rowHeight = 30
@@ -271,7 +321,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         npView.addSubview(col)
 
         [bar, table, npView, coverFlow, game].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; screen.addSubview($0) }
-        [titleLabel, indicator, statusLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; bar.addSubview($0) }
+        [titleLabel, indicator, clockLabel, battery].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; bar.addSubview($0) }
 
         NSLayoutConstraint.activate([
             screen.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
@@ -285,11 +335,15 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             bar.heightAnchor.constraint(equalToConstant: 24),
             titleLabel.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 8),
             titleLabel.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            indicator.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -8),
+            battery.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -8),
+            battery.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            battery.widthAnchor.constraint(equalToConstant: 26),
+            battery.heightAnchor.constraint(equalToConstant: 12),
+            indicator.trailingAnchor.constraint(equalTo: battery.leadingAnchor, constant: -6),
             indicator.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            statusLabel.trailingAnchor.constraint(equalTo: indicator.leadingAnchor, constant: -8),
-            statusLabel.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusLabel.leadingAnchor, constant: -6),
+            clockLabel.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
+            clockLabel.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: clockLabel.leadingAnchor, constant: -6),
 
             table.topAnchor.constraint(equalTo: bar.bottomAnchor),
             table.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
@@ -328,7 +382,8 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         bar.backgroundColor = t.bar
         titleLabel.textColor = t.barText
         indicator.textColor = t.barText
-        statusLabel.textColor = t.barText
+        clockLabel.textColor = t.barText
+        battery.color = t.barText
         table.backgroundColor = t.screen
         npView.backgroundColor = t.screen
         art.backgroundColor = t.bar
@@ -747,11 +802,11 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func updateStatus() {
-        let lvl = UIDevice.current.batteryLevel
-        let pct = lvl >= 0 ? "\(Int(round(lvl * 100)))%" : "--%"
         let st = UIDevice.current.batteryState
-        let chg = (st == .charging || st == .full) ? "\u{26A1}\u{FE0E}" : ""
-        statusLabel.text = clockFormat.string(from: Date()) + "  " + chg + pct
+        let lvl = UIDevice.current.batteryLevel
+        battery.level = lvl >= 0 ? CGFloat(lvl) : 0
+        battery.charging = (st == .charging || st == .full)
+        clockLabel.text = clockFormat.string(from: Date())
     }
 
     @objc private func updateNP() {
