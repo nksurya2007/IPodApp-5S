@@ -1,6 +1,7 @@
 import UIKit
 import MediaPlayer
 import AVFoundation
+import AudioToolbox
 
 struct Row {
     let title: String
@@ -13,6 +14,10 @@ struct Menu {
     let title: String
     var rows: [Row]
     var sel = 0
+}
+
+private func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> UIColor {
+    return UIColor(red: r, green: g, blue: b, alpha: 1)
 }
 
 struct Theme {
@@ -72,7 +77,43 @@ struct Theme {
               subtext: UIColor(red: 0.55, green: 0.35, blue: 0.42, alpha: 1),
               selBg: UIColor(red: 0.85, green: 0.25, blue: 0.45, alpha: 1),
               selText: .white,
-              dark: false)
+              dark: false),
+        Theme(name: "Ocean",
+              body: rgb(0.80, 0.91, 0.97), screen: rgb(0.92, 0.97, 1.00),
+              border: rgb(0.10, 0.30, 0.50), bar: rgb(0.65, 0.82, 0.93),
+              barText: rgb(0.03, 0.15, 0.30), text: rgb(0.03, 0.15, 0.30),
+              subtext: rgb(0.30, 0.45, 0.58), selBg: rgb(0.05, 0.45, 0.75),
+              selText: .white, dark: false),
+        Theme(name: "Sunset",
+              body: rgb(1.00, 0.90, 0.80), screen: rgb(1.00, 0.97, 0.92),
+              border: rgb(0.65, 0.30, 0.10), bar: rgb(0.99, 0.78, 0.55),
+              barText: rgb(0.35, 0.12, 0.02), text: rgb(0.35, 0.12, 0.02),
+              subtext: rgb(0.60, 0.40, 0.25), selBg: rgb(0.95, 0.45, 0.10),
+              selText: .white, dark: false),
+        Theme(name: "Purple",
+              body: rgb(0.90, 0.86, 0.96), screen: rgb(0.97, 0.95, 1.00),
+              border: rgb(0.35, 0.20, 0.55), bar: rgb(0.78, 0.70, 0.92),
+              barText: rgb(0.15, 0.07, 0.30), text: rgb(0.15, 0.07, 0.30),
+              subtext: rgb(0.45, 0.35, 0.60), selBg: rgb(0.50, 0.25, 0.80),
+              selText: .white, dark: false),
+        Theme(name: "Gold",
+              body: rgb(0.96, 0.92, 0.78), screen: rgb(1.00, 0.99, 0.93),
+              border: rgb(0.55, 0.45, 0.10), bar: rgb(0.90, 0.82, 0.50),
+              barText: rgb(0.30, 0.23, 0.02), text: rgb(0.30, 0.23, 0.02),
+              subtext: rgb(0.55, 0.47, 0.20), selBg: rgb(0.78, 0.60, 0.05),
+              selText: .white, dark: false),
+        Theme(name: "U2 Red",
+              body: rgb(0.05, 0.05, 0.05), screen: rgb(0.08, 0.08, 0.08),
+              border: rgb(0.75, 0.05, 0.10), bar: rgb(0.55, 0.05, 0.08),
+              barText: .white, text: .white,
+              subtext: rgb(0.65, 0.65, 0.65), selBg: rgb(0.85, 0.10, 0.15),
+              selText: .white, dark: true),
+        Theme(name: "Matrix",
+              body: rgb(0.02, 0.06, 0.02), screen: rgb(0.00, 0.04, 0.00),
+              border: rgb(0.00, 0.50, 0.10), bar: rgb(0.00, 0.20, 0.05),
+              barText: rgb(0.30, 1.00, 0.40), text: rgb(0.30, 1.00, 0.40),
+              subtext: rgb(0.10, 0.60, 0.20), selBg: rgb(0.10, 0.70, 0.25),
+              selText: .black, dark: true)
     ]
 }
 
@@ -110,6 +151,25 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private var scrubMode = false
     private var volume: Float = AVAudioSession.sharedInstance().outputVolume
     private var lastVolChange = Date.distantPast
+
+    // Cover Flow, game, backlight
+    private let coverFlow = CoverFlowView()
+    private let game = BrickGameView()
+    private var inCoverFlow = false
+    private var inGame = false
+    private let dimView = UIView()
+    private var lastActivity = Date()
+    private var isDimmed = false
+
+    private var clickSoundOn: Bool {
+        return UserDefaults.standard.object(forKey: "clickSound") as? Bool ?? true
+    }
+    private var backlightSec: Int {
+        return UserDefaults.standard.object(forKey: "backlightSec") as? Int ?? 30
+    }
+    private let backlightOptions: [(String, Int)] = [
+        ("Always On", 0), ("10 Seconds", 10), ("20 Seconds", 20), ("30 Seconds", 30), ("1 Minute", 60)
+    ]
 
     override var prefersStatusBarHidden: Bool { return true }
 
@@ -170,6 +230,11 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         table.separatorStyle = .none
         table.tableFooterView = UIView()
         npView.isHidden = true
+        coverFlow.isHidden = true
+        game.isHidden = true
+        dimView.backgroundColor = .black
+        dimView.alpha = 0
+        dimView.isUserInteractionEnabled = false
 
         art.contentMode = .scaleAspectFit
         npTitle.font = UIFont.boldSystemFont(ofSize: 16)
@@ -192,7 +257,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         col.translatesAutoresizingMaskIntoConstraints = false
         npView.addSubview(col)
 
-        [bar, table, npView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; screen.addSubview($0) }
+        [bar, table, npView, coverFlow, game, dimView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; screen.addSubview($0) }
         [titleLabel, indicator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; bar.addSubview($0) }
 
         NSLayoutConstraint.activate([
@@ -222,6 +287,19 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             col.leadingAnchor.constraint(equalTo: npView.leadingAnchor, constant: 10),
             col.trailingAnchor.constraint(equalTo: npView.trailingAnchor, constant: -10),
             art.heightAnchor.constraint(equalToConstant: 90),
+
+            coverFlow.topAnchor.constraint(equalTo: bar.bottomAnchor),
+            coverFlow.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+            coverFlow.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+            coverFlow.bottomAnchor.constraint(equalTo: screen.bottomAnchor),
+            game.topAnchor.constraint(equalTo: bar.bottomAnchor),
+            game.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+            game.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+            game.bottomAnchor.constraint(equalTo: screen.bottomAnchor),
+            dimView.topAnchor.constraint(equalTo: screen.topAnchor),
+            dimView.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+            dimView.bottomAnchor.constraint(equalTo: screen.bottomAnchor),
 
             wheel.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.76),
             wheel.heightAnchor.constraint(equalTo: wheel.widthAnchor),
@@ -258,6 +336,11 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private func wireWheel() {
         wheel.onStep = { [weak self] s in self?.step(s) }
         wheel.onCenter = { [weak self] in self?.center() }
+        wheel.onTouch = { [weak self] in self?.wake() }
+        wheel.onRotate = { [weak self] d in
+            guard let self = self, self.inGame, !self.inNowPlaying else { return }
+            self.game.rotate(d)
+        }
         wheel.onMenu = { [weak self] in self?.menuButton() }
         wheel.onPlay = { [weak self] in self?.toggle() }
         wheel.onNext = { [weak self] in self?.player.skipToNextItem() }
@@ -288,12 +371,22 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 let cols = self.grouped { $0.albumTitle ?? "Unknown Album" }
                 self.push(self.collectionsMenu("Albums", cols) { $0.representativeItem?.albumTitle ?? "Unknown Album" })
             },
+            Row(title: "Cover Flow", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.coverFlow.setAlbums(self.grouped { $0.albumTitle ?? "Unknown Album" })
+                self.inCoverFlow = true
+                self.render()
+            },
             Row(title: "Songs", arrow: true) { [weak self] in
                 guard let self = self else { return }
                 self.push(self.songsMenu("Songs", self.allSongs()))
             },
             Row(title: "Now Playing", arrow: true) { [weak self] in self?.showNP() },
             Row(title: "Shuffle Songs") { [weak self] in self?.shuffleAll() },
+            Row(title: "Extras", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.extrasMenu())
+            },
             Row(title: "Settings", arrow: true) { [weak self] in
                 guard let self = self else { return }
                 self.push(self.settingsMenu())
@@ -358,6 +451,17 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 guard let self = self else { return }
                 self.push(self.controllerMenu())
             },
+            Row(title: "Click Sound", detail: clickSoundOn ? "On" : "Off") { [weak self] in
+                guard let self = self else { return }
+                let on = !self.clickSoundOn
+                UserDefaults.standard.set(on, forKey: "clickSound")
+                self.refreshTop(self.settingsMenu())
+                if on { AudioServicesPlaySystemSound(1104) }
+            },
+            Row(title: "Backlight", arrow: true) { [weak self] in
+                guard let self = self else { return }
+                self.push(self.backlightMenu())
+            },
             Row(title: "About", arrow: true) { [weak self] in
                 guard let self = self else { return }
                 self.push(self.aboutMenu())
@@ -411,6 +515,53 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         return Menu(title: "About", rows: rows)
     }
 
+    private func extrasMenu() -> Menu {
+        return Menu(title: "Extras", rows: [
+            Row(title: "Brick Game") { [weak self] in
+                guard let self = self else { return }
+                self.inGame = true
+                self.game.newGame()
+                self.render()
+            }
+        ])
+    }
+
+    private func backlightMenu() -> Menu {
+        let cur = backlightSec
+        let rows = backlightOptions.map { (name, sec) -> Row in
+            Row(title: name, detail: sec == cur ? "\u{2713}" : nil) { [weak self] in
+                guard let self = self else { return }
+                UserDefaults.standard.set(sec, forKey: "backlightSec")
+                self.wake()
+                self.refreshTop(self.backlightMenu())
+            }
+        }
+        let sel = backlightOptions.firstIndex { $0.1 == cur } ?? 0
+        return Menu(title: "Backlight", rows: rows, sel: sel)
+    }
+
+    // MARK: Backlight
+    private func wake() {
+        lastActivity = Date()
+        if isDimmed {
+            isDimmed = false
+            UIView.animate(withDuration: 0.15) { self.dimView.alpha = 0 }
+        }
+    }
+
+    private func checkBacklight() {
+        let sec = backlightSec
+        if sec <= 0 {
+            if isDimmed { wake() }
+            return
+        }
+        if inGame && game.isRunning { lastActivity = Date() }
+        if !isDimmed && Date().timeIntervalSince(lastActivity) > Double(sec) {
+            isDimmed = true
+            UIView.animate(withDuration: 0.5) { self.dimView.alpha = 0.88 }
+        }
+    }
+
     /// Replaces the top menu (to refresh checkmarks) while keeping the highlighted row.
     private func refreshTop(_ m: Menu) {
         guard !stack.isEmpty else { return }
@@ -441,6 +592,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     func shutdown() {
         timer?.invalidate()
         timer = nil
+        game.stop()
         player.stop()
         player.endGeneratingPlaybackNotifications()
     }
@@ -472,7 +624,15 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private func push(_ m: Menu) { stack.append(m); render() }
 
     private func menuButton() {
-        if inNowPlaying { inNowPlaying = false } else if stack.count > 1 { stack.removeLast() }
+        if inNowPlaying {
+            inNowPlaying = false
+        } else if inGame {
+            inGame = false
+        } else if inCoverFlow {
+            inCoverFlow = false
+        } else if stack.count > 1 {
+            stack.removeLast()
+        }
         render()
     }
 
@@ -482,6 +642,8 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     private func step(_ s: Int) {
+        if inGame && !inNowPlaying { return }
+        if clickSoundOn { AudioServicesPlaySystemSound(1104) }
         if inNowPlaying {
             if scrubMode {
                 let d = player.nowPlayingItem?.playbackDuration ?? 0
@@ -490,6 +652,8 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
                 setVolume(volume + Float(s) / 16)
             }
             updateNP()
+        } else if inCoverFlow {
+            coverFlow.move(s)
         } else if !stack.isEmpty {
             let i = stack.count - 1
             stack[i].sel = max(0, min(stack[i].rows.count - 1, stack[i].sel + s))
@@ -499,17 +663,29 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
 
     private func center() {
         if inNowPlaying { scrubMode.toggle(); updateNP(); return }
+        if inGame { game.press(); return }
+        if inCoverFlow {
+            if let c = coverFlow.current { play(c.items, at: 0) }
+            return
+        }
         guard let m = stack.last, m.sel < m.rows.count else { return }
         m.rows[m.sel].action()
     }
 
     // MARK: Render
     private func render() {
-        table.isHidden = inNowPlaying
+        let showTable = !inNowPlaying && !inGame && !inCoverFlow
+        table.isHidden = !showTable
         npView.isHidden = !inNowPlaying
-        titleLabel.text = inNowPlaying ? "Now Playing" : (stack.last?.title ?? "iPod")
+        coverFlow.isHidden = !(inCoverFlow && !inNowPlaying)
+        game.isHidden = !(inGame && !inNowPlaying)
+        if inGame { game.start() } else { game.stop() }
+        if inNowPlaying { titleLabel.text = "Now Playing" }
+        else if inGame { titleLabel.text = "Brick Game" }
+        else if inCoverFlow { titleLabel.text = "Cover Flow" }
+        else { titleLabel.text = stack.last?.title ?? "iPod" }
         if inNowPlaying { updateNP() }
-        else {
+        else if showTable {
             table.reloadData()
             if let m = stack.last, !m.rows.isEmpty {
                 table.scrollToRow(at: IndexPath(row: m.sel, section: 0), at: .none, animated: false)
@@ -518,6 +694,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     }
 
     @objc private func updateNP() {
+        checkBacklight()
         indicator.text = player.playbackState == .playing ? "\u{25B6}\u{FE0E}" : "\u{2758}\u{2758}"
         guard inNowPlaying else { return }
         if Date().timeIntervalSince(lastVolChange) > 0.8 {   // pick up hardware volume button changes

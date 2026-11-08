@@ -27,12 +27,34 @@ struct WheelStyle {
                    ring: UIColor(red: 0.80, green: 0.12, blue: 0.16, alpha: 1),
                    center: UIColor(red: 0.90, green: 0.25, blue: 0.28, alpha: 1),
                    label: UIColor(white: 1.0, alpha: 0.9),
-                   border: UIColor(red: 0.62, green: 0.08, blue: 0.12, alpha: 1))
+                   border: UIColor(red: 0.62, green: 0.08, blue: 0.12, alpha: 1)),
+        WheelStyle(name: "Gold",
+                   ring: UIColor(red: 0.85, green: 0.72, blue: 0.35, alpha: 1),
+                   center: UIColor(red: 0.93, green: 0.83, blue: 0.52, alpha: 1),
+                   label: UIColor(red: 0.35, green: 0.25, blue: 0.05, alpha: 1),
+                   border: UIColor(red: 0.65, green: 0.52, blue: 0.20, alpha: 1)),
+        WheelStyle(name: "Blue",
+                   ring: UIColor(red: 0.25, green: 0.45, blue: 0.80, alpha: 1),
+                   center: UIColor(red: 0.40, green: 0.60, blue: 0.92, alpha: 1),
+                   label: UIColor(white: 1.0, alpha: 0.9),
+                   border: UIColor(red: 0.15, green: 0.32, blue: 0.62, alpha: 1)),
+        WheelStyle(name: "Pink",
+                   ring: UIColor(red: 0.93, green: 0.55, blue: 0.70, alpha: 1),
+                   center: UIColor(red: 0.97, green: 0.72, blue: 0.82, alpha: 1),
+                   label: UIColor(red: 0.45, green: 0.10, blue: 0.25, alpha: 1),
+                   border: UIColor(red: 0.78, green: 0.38, blue: 0.55, alpha: 1)),
+        WheelStyle(name: "Green",
+                   ring: UIColor(red: 0.25, green: 0.62, blue: 0.35, alpha: 1),
+                   center: UIColor(red: 0.42, green: 0.78, blue: 0.50, alpha: 1),
+                   label: UIColor(white: 1.0, alpha: 0.9),
+                   border: UIColor(red: 0.15, green: 0.45, blue: 0.25, alpha: 1))
     ]
 }
 
 final class ClickWheel: UIView {
     var onStep: ((Int) -> Void)?
+    var onRotate: ((CGFloat) -> Void)?   // raw rotation in degrees (used by the game)
+    var onTouch: (() -> Void)?           // any touch (wakes the backlight)
     var onCenter, onMenu, onPlay, onNext, onPrev: (() -> Void)?
 
     var style: WheelStyle = WheelStyle.all[0] {
@@ -95,10 +117,12 @@ final class ClickWheel: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
         lastAngle = angle(p); acc = 0; moved = false; start = p
+        onTouch?()
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
+        onTouch?()
         let a = angle(p)
         var d = a - lastAngle
         if d > 180 { d -= 360 }
@@ -107,6 +131,7 @@ final class ClickWheel: UIView {
         acc += d
         if hypot(p.x - start.x, p.y - start.y) > 12 { moved = true }
         guard moved else { return }
+        onRotate?(d)
         while acc >= 24 { onStep?(1); acc -= 24 }
         while acc <= -24 { onStep?(-1); acc += 24 }
     }
