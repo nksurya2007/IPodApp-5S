@@ -132,6 +132,13 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private let bar = UIView()
     private let titleLabel = UILabel()
     private let indicator = UILabel()
+    private let statusLabel = UILabel()   // clock + battery %
+    private let clockFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
     private let table = UITableView()
     private let npView = UIView()
     private let art = UIImageView()
@@ -183,6 +190,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        UIDevice.current.isBatteryMonitoringEnabled = true
         buildUI()
         applyTheme()
         wireWheel()
@@ -228,6 +236,10 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         titleLabel.font = UIFont.boldSystemFont(ofSize: 13)
         indicator.font = UIFont.boldSystemFont(ofSize: 12)
         indicator.textAlignment = .right
+        statusLabel.font = UIFont.boldSystemFont(ofSize: 11)
+        statusLabel.textAlignment = .right
+        statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         table.dataSource = self
         table.rowHeight = 30
         table.isUserInteractionEnabled = false
@@ -259,7 +271,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         npView.addSubview(col)
 
         [bar, table, npView, coverFlow, game].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; screen.addSubview($0) }
-        [titleLabel, indicator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; bar.addSubview($0) }
+        [titleLabel, indicator, statusLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; bar.addSubview($0) }
 
         NSLayoutConstraint.activate([
             screen.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
@@ -275,6 +287,9 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
             titleLabel.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
             indicator.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -8),
             indicator.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            statusLabel.trailingAnchor.constraint(equalTo: indicator.leadingAnchor, constant: -8),
+            statusLabel.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusLabel.leadingAnchor, constant: -6),
 
             table.topAnchor.constraint(equalTo: bar.bottomAnchor),
             table.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
@@ -313,6 +328,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         bar.backgroundColor = t.bar
         titleLabel.textColor = t.barText
         indicator.textColor = t.barText
+        statusLabel.textColor = t.barText
         table.backgroundColor = t.screen
         npView.backgroundColor = t.screen
         art.backgroundColor = t.bar
@@ -730,7 +746,16 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         }
     }
 
+    private func updateStatus() {
+        let lvl = UIDevice.current.batteryLevel
+        let pct = lvl >= 0 ? "\(Int(round(lvl * 100)))%" : "--%"
+        let st = UIDevice.current.batteryState
+        let chg = (st == .charging || st == .full) ? "\u{26A1}\u{FE0E}" : ""
+        statusLabel.text = clockFormat.string(from: Date()) + "  " + chg + pct
+    }
+
     @objc private func updateNP() {
+        updateStatus()
         indicator.text = player.playbackState == .playing ? "\u{25B6}\u{FE0E}" : "\u{2758}\u{2758}"
         guard inNowPlaying else { return }
         if Date().timeIntervalSince(lastVolChange) > 0.8 {   // pick up hardware volume button changes
