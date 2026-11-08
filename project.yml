@@ -17,6 +17,7 @@ targets:
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: true
         UILaunchStoryboardName: LaunchScreen
+        UIBackgroundModes: [audio]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.surya.ipodapp
