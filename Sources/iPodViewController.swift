@@ -208,6 +208,7 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private var scrubMode = false
     private var volume: Float = AVAudioSession.sharedInstance().outputVolume
     private var lastVolChange = Date.distantPast
+    private var volObs: NSKeyValueObservation?
 
     // Cover Flow, game, songs view
     private let coverFlow = CoverFlowView()
@@ -240,6 +241,13 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        volObs = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { [weak self] _, change in
+            guard let self = self, let v = change.newValue else { return }
+            DispatchQueue.main.async {
+                // ignore the echo of our own wheel changes
+                if Date().timeIntervalSince(self.lastVolChange) > 1.0 { self.volume = v }
+            }
+        }
         UIDevice.current.isBatteryMonitoringEnabled = true
         buildUI()
         applyTheme()
@@ -278,7 +286,9 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     // MARK: UI
     private func buildUI() {
         let g = view.safeAreaLayoutGuide
-        [screen, wheel, volumeView].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
+        [screen, wheel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
+        volumeView.alpha = 0.01   // keep it "visible" so the hidden slider works
+        view.addSubview(volumeView)
         screen.layer.borderWidth = 3
         screen.layer.cornerRadius = 8
         screen.clipsToBounds = true
@@ -689,7 +699,9 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
     private func setVolume(_ v: Float) {
         volume = max(0, min(1, v))
         lastVolChange = Date()
-        volumeSlider?.value = volume
+        guard let sl = volumeSlider else { return }
+        sl.value = volume
+        sl.sendActions(for: .valueChanged)   // makes the system apply it
     }
 
     /// Stops playback and tears everything down (called when the app is closed).
@@ -813,9 +825,6 @@ final class iPodViewController: UIViewController, UITableViewDataSource {
         updateStatus()
         indicator.text = player.playbackState == .playing ? "\u{25B6}\u{FE0E}" : "\u{2758}\u{2758}"
         guard inNowPlaying else { return }
-        if Date().timeIntervalSince(lastVolChange) > 0.8 {   // pick up hardware volume button changes
-            volume = AVAudioSession.sharedInstance().outputVolume
-        }
         volBar.progress = volume
         modeLabel.text = scrubMode ? "Wheel: Seek (press center)" : "Wheel: Volume (press center)"
         let item = player.nowPlayingItem
